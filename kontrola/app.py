@@ -19,9 +19,12 @@ import base64
 import pytz
 import functools
 
-# === 2. Konfiguracija ===
+ === 2. Konfiguracija ===
 app = Flask(__name__)
-DATABASE = 'evidencija.db'
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # folder gde je app.py
+DATABASE = os.path.join(BASE_DIR, "evidencija.db")
+
 UPLOAD_FOLDER_GRESKE = os.path.join(app.root_path, 'uploads', 'greske')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER_GRESKE'] = UPLOAD_FOLDER_GRESKE
@@ -655,4 +658,5 @@ if __name__ == '__main__':
     with app.app_context():
         init_db(get_db())
     print("Pokretanje Flask servera...")
+
     app.run(debug=True, host='0.0.0.0', port=5000)
