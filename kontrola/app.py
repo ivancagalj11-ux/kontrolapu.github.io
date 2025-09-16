@@ -19,7 +19,7 @@ import base64
 import pytz
 import functools
 
- === 2. Konfiguracija ===
+# === 2. Konfiguracija ===
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # folder gde je app.py
@@ -660,3 +660,4 @@ if __name__ == '__main__':
     print("Pokretanje Flask servera...")
 
     app.run(debug=True, host='0.0.0.0', port=5000)
+
