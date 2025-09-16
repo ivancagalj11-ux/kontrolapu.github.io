@@ -1,0 +1,1038 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Početna - Evidencija grešaka{% endblock %}
+
+{% block head_extra %}
+    {# Ovdje mogu doći dodatni linkovi ili meta tagovi ako zatrebaju #}
+{% endblock %}
+
+{% block content %}
+
+<div class="header-container">
+    {% if logo_url %}
+        <img src="{{ logo_url }}" alt="Logo Tvrtke" class="header-logo left-logo">
+    {% else %}
+        <div class="header-logo left-logo"></div> {# Placeholder ako nema loga #}
+    {% endif %}
+    <h1>Evidencija grešaka</h1>
+    
+    {# NOVO: Prikaz korisnika i dugme za odjavu #}
+    <div class="user-info">
+        <span>Korisnik, <strong>{{ current_user.full_name }}</strong></span>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Odjavi se</a>
+    </div>
+</div>
+
+{# NOVO: Prikaz flash poruka #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="main-layout">
+    <!-- Lijeva Kolona -->
+    <div class="left-column">
+        <div class="customer-filter">
+            <label>Filtriraj po kupcu:</label>
+            <div id="customer-filter-buttons">
+                <button class="filter-btn active" data-kupac="Svi">Svi</button>
+                {# Gumbi za kupce će se dinamički dodati ovdje pomoću JS-a #}
+            </div>
+            <p id="kupac-status" class="status-message"></p>
+        </div>
+
+        <div class="projekti-section">
+            <h2>Projekti</h2>
+            <label for="projekt-select">Odaberi projekt:</label>
+            <select name="projekti" id="projekt-select">
+                <option value="">-- Učitavanje kupaca --</option>
+            </select>
+            {# IZMJENA: Dugme za brisanje projekta je dodano ovdje #}
+            <button id="obrisi-projekt-btn" class="delete-btn" disabled title="Obriši odabrani projekt">
+                <svg width="14" height="14"><use href="#trash-icon"/></svg>
+                Obriši projekt
+            </button>
+            <p id="projekt-list-status" class="status-message"></p>
+        </div>
+        <br>
+
+        <div class="add-form">
+            <h4>Dodaj novi projekt</h4>
+            <label for="novi-projekt-kupac">Kupac:</label>
+            <select id="novi-projekt-kupac" name="kupac">
+                <option value="">-- Odaberi Kupca --</option>
+                <option value="Smit">Smit</option>
+                <option value="Siemens Weiz">Siemens Weiz</option>
+                <option value="Siemens Linz">Siemens Linz</option>
+                <option value="Siemens Dresden">Siemens Dresden</option>
+                <option value="Siemens Nurnberg">Siemens Nurnberg</option>
+                <option value="Hitachi Lodz">Hitachi Lodz</option>
+                <option value="Hitachi Ludvika">Hitachi Ludvika</option>
+                <option value="Hitachi Halle">Hitachi Halle</option>
+                <option value="Hitachi Honeff">Hitachi Honeff</option>
+                <option value="SGB">SGB</option>
+                <option value="Ostalo">Ostalo</option>
+            </select>
+            <label for="novi-projekt-ime">Ime novog projekta:</label>
+            <input type="text" id="novi-projekt-ime" placeholder="Unesi ime projekta">
+            <button id="dodaj-projekt-btn">Dodaj projekt</button>
+            <p id="projekt-add-status" class="status-message"></p>
+        </div>
+
+        <div class="export-section">
+             <h4>Globalni Izvoz</h4>
+             <button id="export-excel-global-btn" class="excel-btn">SVE Greške (Excel)</button>
+             <button id="export-csv-btn" class="csv-btn">SVE Greške (CSV)</button>
+        </div>
+
+        <div class="chart-section">
+            <h4>Statistika grešaka po tipu</h4>
+            <div id="chart-container">
+                <canvas id="errorChart"></canvas>
+            </div>
+             <p id="chart-status" class="status-message"></p>
+        </div>
+    </div>
+
+    <!-- Desna Kolona -->
+    <div class="right-column">
+        <div id="sklopovi-view">
+            <h2>Sklopovi</h2>
+            <div id="sklopovi-list">
+                <p><i>Odaberite projekt iz liste lijevo.</i></p>
+            </div>
+            <br>
+            <button id="dodaj-sklop-btn" style="display: none;">Dodaj novi sklop</button>
+            <div id="novi-sklop-forma" class="edit-add-form" style="display: none;">
+                <h4>Dodaj novi sklop za projekt: <span id="odabrani-projekt-za-sklop"></span></h4>
+                <input type="text" id="novi-sklop-ime" placeholder="Ime novog sklopa">
+                <button id="spremi-sklop-btn">Spremi</button>
+                <button type="button" class="cancel-btn" id="odustani-sklop-btn">Odustani</button>
+                <p id="sklop-add-status" class="status-message"></p>
+            </div>
+            <div id="uredi-sklop-modal" class="edit-add-form edit-form-highlight" style="display: none;">
+                <h4>Uredi/Obriši sklop: <span id="uredi-sklop-ime-staro"></span></h4>
+                <input type="hidden" id="uredi-sklop-id">
+                <label for="uredi-sklop-ime-novo">Novo ime sklopa:</label>
+                <input type="text" id="uredi-sklop-ime-novo" placeholder="Unesite novo ime">
+                <button id="spremi-ime-sklopa-btn">Spremi ime</button>
+                <hr style="margin: 15px 0;">
+                <button id="obrisi-sklop-btn" class="delete-btn">Obriši sklop</button>
+                <button type="button" class="cancel-btn" id="odustani-uredi-sklop-btn">Odustani</button>
+                <p id="uredi-sklop-status" class="status-message"></p>
+            </div>
+        </div>
+
+        <div id="greske-view" style="display: none;">
+             <button id="nazad-na-sklopove">← Nazad na sklopove</button>
+             <h2 id="odabrani-sklop-naslov"></h2>
+
+             <div id="export-buttons-sklop" class="export-buttons-group" style="display: none;">
+                 <span class="export-label">Izvoz za ovaj sklop:</span>
+                 <button id="excel-sklop-sve-btn" class="excel-btn">Sve (Excel)</button>
+                 <button id="excel-sklop-nerijesene-btn" class="excel-btn">Neriješene (Excel)</button>
+                 <button id="pdf-sklop-sve-btn" class="pdf-btn-alt">Sve (PDF)</button>
+                 <button id="pdf-sklop-nerijesene-btn" class="pdf-btn-alt">Neriješene (PDF)</button>
+             </div>
+
+             <h3>Evidentirane greške:</h3>
+             <div id="greske-list"> <p><i>Nema grešaka.</i></p> </div>
+             <br>
+             <button id="dodaj-gresku-btn">Dodaj novu grešku</button>
+
+             <div id="nova-greska-forma" class="edit-add-form" style="display: none;">
+                 <h4>Nova greška za sklop: <span id="odabrani-sklop-za-gresku"></span></h4>
+                 <label for="tip-greske">Tip greške:</label>
+                 <select id="tip-greske" name="tip">
+                     <option value="">-- Odaberite tip --</option>
+                     <option value="Pozicija nije izradena prema crtezu">Pozicija nije izradena prema crtezu</option>
+                     <option value="Pozicija nije postavljena prema crtezu">Pozicija nije postavljena prema crtezu</option>
+                     <option value="Pozicija nije postavljena (nije montirana/zavarena)">Pozicija nije postavljena (nije montirana/zavarena)</option>
+                     <option value="Odstupanje ravnosti pozicije ili sklopa">Odstupanje ravnosti pozicije ili sklopa</option>
+                     <option value="Pozicija ili sklop nedostaje (odvojena pozicija)">Pozicija ili sklop nedostaje (odvojena pozicija)</option>
+                     <option value="Postavljena pogresna pozicija">Postavljena pogresna pozicija</option>
+                     <option value="Radijus nedostaje ili nije OK">Radijus nedostaje ili nije OK</option>
+                     <option value="Kut doma nije prema crtezu">Kut doma nije prema crtezu</option>
+                     <option value="Zazor/zracnost nije prema zahtjevima">Zazor/zracnost nije prema zahtjevima</option>
+                     <option value="Nepodudarnost otvora">Nepodudarnost otvora</option>
+                     <option value="Nagib cjevovoda nije OK">Nagib cjevovoda nije OK</option>
+                     <option value="Pozicija/sklop nije raspisana ili pogresno raspisana">Pozicija/sklop nije raspisana ili pogresno raspisana</option>
+                     <option value="Dimenzije/mjere sklopa nisu prema crtezu">Dimenzije/mjere sklopa nisu prema crtezu</option>
+                     <option value="Mehanicka ostecenja">Mehanicka ostecenja</option>
+                     <option value="Navoj nije OK ili nedostaje">Navoj nije OK ili nedostaje</option>
+                     <option value="Ostalo">Ostalo (navesti gresku)</option>
+                 </select>
+                 <label for="radno-mjesto">Opis greške:</label>
+                 <input type="text" id="radno-mjesto" name="mjesto" placeholder="Unesite detaljan opis greške...">
+                 <label for="evidentirao">Evidentirao:</label>
+                 {# NOVO: Vrijednost se povlači od prijavljenog korisnika i polje je readonly #}
+                 <input type="text" id="evidentirao" name="evidentirao" value="{{ current_user.full_name }}" readonly class="readonly-input">
+                 <label for="slike">Dodaj slike (opcionalno):</label>
+                 <input type="file" id="slike" name="slike[]" multiple accept="image/png, image/jpeg, image/gif">
+                 <p>Datum i vrijeme: <span id="datum-vrijeme"></span></p>
+                 <button id="spremi-gresku-btn">Spremi grešku</button>
+                 <button type="button" class="cancel-btn" id="odustani-greska-btn">Odustani</button>
+                 <p id="greska-add-status" class="status-message"></p>
+             </div>
+
+             <div id="uredi-gresku-forma" class="edit-add-form edit-form-highlight" style="display: none;">
+                 <h4>Uredi grešku (Rb. <span id="uredi-greska-id-display"></span>)</h4>
+                 <input type="hidden" id="uredi-greska-id">
+                 <label for="uredi-tip-greske">Tip greške:</label>
+                 <select id="uredi-tip-greske" name="tip">
+                     <option value="">-- Odaberite tip --</option>
+                     <option value="Pozicija nije izradena prema crtezu">Pozicija nije izradena prema crtezu</option>
+                     <option value="Pozicija nije postavljena prema crtezu">Pozicija nije postavljena prema crtezu</option>
+                     <option value="Pozicija nije postavljena (nije montirana/zavarena)">Pozicija nije postavljena (nije montirana/zavarena)</option>
+                     <option value="Odstupanje ravnosti pozicije ili sklopa">Odstupanje ravnosti pozicije ili sklopa</option>
+                     <option value="Pozicija ili sklop nedostaje (odvojena pozicija)">Pozicija ili sklop nedostaje (odvojena pozicija)</option>
+                     <option value="Postavljena pogresna pozicija">Postavljena pogresna pozicija</option>
+                     <option value="Radijus nedostaje ili nije OK">Radijus nedostaje ili nije OK</option>
+                     <option value="Kut doma nije prema crtezu">Kut doma nije prema crtezu</option>
+                     <option value="Zazor/zracnost nije prema zahtjevima">Zazor/zracnost nije prema zahtjevima</option>
+                     <option value="Nepodudarnost otvora">Nepodudarnost otvora</option>
+                     <option value="Nagib cjevovoda nije OK">Nagib cjevovoda nije OK</option>
+                     <option value="Pozicija/sklop nije raspisana ili pogresno raspisana">Pozicija/sklop nije raspisana ili pogresno raspisana</option>
+                     <option value="Dimenzije/mjere sklopa nisu prema crtezu">Dimenzije/mjere sklopa nisu prema crtezu</option>
+                     <option value="Mehanicka ostecenja">Mehanicka ostecenja</option>
+                     <option value="Navoj nije OK ili nedostaje">Navoj nije OK ili nedostaje</option>
+                     <option value="Ostalo">Ostalo (navesti gresku)</option>
+                 </select>
+                 <label for="uredi-radno-mjesto">Opis greške:</label>
+                 <input type="text" id="uredi-radno-mjesto" name="mjesto" placeholder="Unesite detaljan opis greške...">
+                 <label for="uredi-evidentirao">Evidentirao:</label>
+                 <input type="text" id="uredi-evidentirao" name="evidentirao" readonly class="readonly-input">
+                 <small>Vrijeme evid.: <span id="uredi-vrijeme-evid"></span></small><br><br>
+                 <label for="uredi-rijesio">Riješio:</label>
+                 <input type="text" id="uredi-rijesio" name="rijesio" placeholder="Ime ili prazno za Nije Riješeno">
+                 <small>Vrijeme rješ.: <span id="uredi-vrijeme-rjes"></span></small><br><br>
+                 <div id="postojece-slike-list" style="margin-bottom: 15px;">
+                     <label>Postojeće slike:</label>
+                     <div id="slike-pregled-edit"></div>
+                 </div>
+                 <label for="slike_edit">Dodaj nove slike (opcionalno):</label>
+                 <input type="file" id="slike_edit" name="slike_edit[]" multiple accept="image/png, image/jpeg, image/gif">
+                 <button id="spremi-izmjene-greske-btn">Spremi izmjene</button>
+                 <button type="button" class="cancel-btn" id="odustani-uredi-gresku-btn">Odustani</button>
+                 <p id="uredi-greska-status" class="status-message"></p>
+             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal za prikaz slika -->
+<div id="imageModal" class="modal">
+    <span class="close-modal" id="closeImageModal" title="Zatvori">×</span>
+    <div class="modal-navigation">
+        <button id="modalPrevBtn" title="Prethodna" style="display: none;"><</button>
+    </div>
+    <div class="modal-content" id="modalBody">
+        <img id="modalImage" src="" alt="Slika greške">
+    </div>
+    <div class="modal-navigation">
+        <button id="modalNextBtn" title="Sljedeća" style="display: none;">></button>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    {# OVDJE JE TVOJA KOMPLETNA, ORIGINALNA JAVASCRIPT SEKCIJA #}
+    {# DODAO SAM SAMO FUNKCIJU I EVENT LISTENER ZA BRISANJE PROJEKTA I KOD ZA OMOGUĆAVANJE GUMBA #}
+
+    // Pomoćne funkcije
+    function prikaziStatus(elementId, poruka, tip = 'info') {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.textContent = poruka;
+        el.className = 'status-message'; // Resetiraj klase
+        if (tip === 'success') el.classList.add('success');
+        else if (tip === 'error') el.classList.add('error');
+        else if (tip === 'loading') el.classList.add('loading');
+        if (tip !== 'loading') {
+            setTimeout(() => {
+                if (el.textContent === poruka) {
+                    el.textContent = '';
+                    el.className = 'status-message';
+                }
+            }, 5000);
+        }
+    }
+
+    function formatirajDatum(isoString) {
+        if (!isoString) return 'N/A';
+        try {
+            const date = new Date(isoString);
+            if (isNaN(date.getTime())) {
+                 const parts = isoString.split(/[-T:\.Z]/);
+                 if (parts.length >= 6) {
+                     const reconstructed = `${parts[0]}-${parts[1]}-${parts[2]}T${parts[3]}:${parts[4]}:${parts[5]}`;
+                     const fallbackDate = new Date(reconstructed);
+                     if (!isNaN(fallbackDate.getTime())) {
+                         return fallbackDate.toLocaleString('hr-HR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                     }
+                 }
+                return isoString;
+            }
+            return date.toLocaleString('hr-HR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        } catch (e) {
+            return isoString;
+        }
+    }
+
+    // Globalne varijable
+    let errorChartInstance = null;
+    let modalImageFilenames = [];
+    let modalImageIndex = 0;
+    const modal = document.getElementById('imageModal');
+    const modalBody = document.getElementById('modalBody');
+    const modalImage = document.getElementById('modalImage');
+    const modalPrevBtn = document.getElementById('modalPrevBtn');
+    const modalNextBtn = document.getElementById('modalNextBtn');
+    const closeModalBtn = document.getElementById('closeImageModal');
+
+    // --- Dohvat podataka ---
+    async function dohvatiProjekte(kupacFilter = 'Svi') {
+        const projektSelect = document.getElementById('projekt-select');
+        const statusP = document.getElementById('projekt-list-status');
+        const deleteBtn = document.getElementById('obrisi-projekt-btn');
+        deleteBtn.disabled = true;
+        projektSelect.innerHTML = '<option value="">Učitavanje...</option>';
+        statusP.textContent = '';
+        document.getElementById('sklopovi-list').innerHTML = '<p><i>Odaberite projekt.</i></p>';
+        document.getElementById('greske-view').style.display = 'none';
+        document.getElementById('uredi-gresku-forma').style.display = 'none';
+        document.getElementById('uredi-sklop-modal').style.display = 'none';
+        document.getElementById('dodaj-sklop-btn').style.display = 'none';
+
+        try {
+            let url = '/api/projekti';
+            if (kupacFilter !== 'Svi') {
+                url += `?kupac=${encodeURIComponent(kupacFilter)}`;
+            }
+            const response = await fetch(url);
+            if (!response.ok) {
+                 throw new Error(`HTTP ${response.status}`);
+            }
+            const projekti = await response.json();
+            projektSelect.innerHTML = '<option value="">-- Odaberite projekt --</option>';
+            if (projekti.length > 0) {
+                projekti.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.naziv;
+                    projektSelect.appendChild(option);
+                });
+            } else {
+                projektSelect.innerHTML = '<option value="">-- Nema projekata za odabranog kupca --</option>';
+            }
+        } catch (error) {
+            console.error("Greška kod dohvaćanja projekata:", error);
+            projektSelect.innerHTML = '<option value="">Greška!</option>';
+            prikaziStatus('projekt-list-status', `Greška kod dohvaćanja projekata: ${error.message}`, 'error');
+        }
+    }
+
+    // ... (sve ostale JS funkcije odavde su iste kao u tvom originalu, dodao sam samo brisanje projekta na kraju)
+    async function dohvatiIPrikaziKupce() {
+        const filterButtonsDiv = document.getElementById('customer-filter-buttons');
+        const statusP = document.getElementById('kupac-status');
+        statusP.textContent = '';
+        try {
+            const response = await fetch('/api/kupci');
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const kupci = await response.json();
+            filterButtonsDiv.querySelectorAll('.filter-btn:not([data-kupac="Svi"])').forEach(btn => btn.remove());
+            kupci.forEach(kupac => {
+                const button = document.createElement('button');
+                button.classList.add('filter-btn');
+                button.dataset.kupac = kupac;
+                button.textContent = kupac;
+                filterButtonsDiv.appendChild(button);
+            });
+        } catch (error) {
+            console.error("Greška kod dohvaćanja kupaca:", error);
+            prikaziStatus('kupac-status', `Greška kod dohvaćanja kupaca: ${error.message}`, 'error');
+        }
+    }
+    async function dohvatiSklopove(projektId) {
+        const sklopoviListDiv = document.getElementById('sklopovi-list');
+        const dodajSklopBtn = document.getElementById('dodaj-sklop-btn');
+        const odabraniProjektSpan = document.getElementById('odabrani-projekt-za-sklop');
+        const noviSklopForma = document.getElementById('novi-sklop-forma');
+        const urediSklopModal = document.getElementById('uredi-sklop-modal');
+        sklopoviListDiv.innerHTML = '<p><i>Učitavanje...</i></p>';
+        dodajSklopBtn.style.display = 'none';
+        noviSklopForma.style.display = 'none';
+        urediSklopModal.style.display = 'none';
+        document.getElementById('greske-view').style.display = 'none';
+        prikaziStatus('sklop-add-status', '');
+        prikaziStatus('uredi-sklop-status', '');
+        if (!projektId) {
+            sklopoviListDiv.innerHTML = '<p><i>Odaberite projekt.</i></p>';
+            return;
+        }
+        const odabraniProjektText = document.getElementById('projekt-select').selectedOptions[0]?.text || 'Nepoznat projekt';
+        odabraniProjektSpan.textContent = odabraniProjektText;
+        try {
+            const response = await fetch(`/api/sklopovi/${projektId}`);
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const sklopovi = await response.json();
+            sklopoviListDiv.innerHTML = '';
+            if (sklopovi.length === 0) {
+                sklopoviListDiv.innerHTML = '<p><i>Nema sklopova za ovaj projekt.</i></p>';
+            } else {
+                sklopovi.forEach(sklop => {
+                    const div = document.createElement('div');
+                    div.classList.add('sklop-container');
+                    div.innerHTML = `
+                        <button class="sklop-btn" data-sklop-id="${sklop.id}" data-sklop-naziv="${sklop.naziv}">${sklop.naziv}</button>
+                        <div class="sklop-actions">
+                            <button class="sklop-action-btn uredi-sklop-btn" data-sklop-id="${sklop.id}" data-sklop-naziv="${sklop.naziv}" title="Uredi/Obriši sklop">
+                                <svg width="14" height="14"><use href="#gear-icon"/></svg>
+                            </button>
+                        </div>`;
+                    div.querySelector('.sklop-btn').addEventListener('click', prikaziGreskeZaSklop);
+                    div.querySelector('.uredi-sklop-btn').addEventListener('click', otvoriFormuZaSklop);
+                    sklopoviListDiv.appendChild(div);
+                });
+            }
+            dodajSklopBtn.style.display = 'inline-block';
+        } catch (error) {
+            console.error("Greška pri učitavanju sklopova:", error);
+            sklopoviListDiv.innerHTML = `<p class="status-message error">Greška pri učitavanju sklopova: ${error.message}</p>`;
+        }
+    }
+    async function prikaziGreskeZaSklop(event) {
+        const sklopButton = event.target.closest('button');
+        if (!sklopButton) { return; }
+        const sklopId = sklopButton.dataset.sklopId;
+        const sklopNaziv = sklopButton.dataset.sklopNaziv;
+        const sklopoviView = document.getElementById('sklopovi-view');
+        const greskeView = document.getElementById('greske-view');
+        const odabraniSklopNaslov = document.getElementById('odabrani-sklop-naslov');
+        const odabraniSklopZaGresku = document.getElementById('odabrani-sklop-za-gresku');
+        const greskeListDiv = document.getElementById('greske-list');
+        const novaGreskaForma = document.getElementById('nova-greska-forma');
+        const urediGreskuForma = document.getElementById('uredi-gresku-forma');
+        const exportButtonsDiv = document.getElementById('export-buttons-sklop');
+        sklopoviView.style.display = 'none';
+        greskeView.style.display = 'block';
+        odabraniSklopNaslov.textContent = `Sklop: ${sklopNaziv}`;
+        odabraniSklopZaGresku.textContent = sklopNaziv;
+        greskeView.dataset.trenutniSklopId = sklopId;
+        novaGreskaForma.style.display = 'none';
+        urediGreskuForma.style.display = 'none';
+        exportButtonsDiv.style.display = 'none';
+        prikaziStatus('greska-add-status', '');
+        prikaziStatus('uredi-greska-status', '');
+        greskeListDiv.innerHTML = '<p><i>Učitavanje grešaka...</i></p>';
+        try {
+            const response = await fetch(`/api/greske/sklop/${sklopId}`);
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const greske = await response.json();
+            greskeListDiv.innerHTML = '';
+            exportButtonsDiv.style.display = 'flex';
+            if (greske.length === 0) {
+                 greskeListDiv.innerHTML = '<p><i>Nema evidentiranih grešaka za ovaj sklop.</i></p>';
+            } else {
+                const ul = document.createElement('ul');
+                ul.style.listStyle = 'none';
+                ul.style.padding = '0';
+                greske.forEach((greska, index) => {
+                    const li = document.createElement('li');
+                    li.dataset.greskaId = greska.id;
+                    li.classList.add('greska-item');
+                    if (greska.rijesio) { li.classList.add('status-rijeseno'); }
+                    else { li.classList.add('status-nije-rijeseno'); }
+                    let vrijemeEvid = formatirajDatum(greska.vrijeme_evidentiranja);
+                    let vrijemeRjes = formatirajDatum(greska.vrijeme_rjesenja);
+                    const imaSlika = greska.slike && greska.slike.length > 0 && greska.slike[0] !== null;
+                    li.innerHTML = `
+                        <div class="greska-sadrzaj">
+                            <strong>Rb. ${index + 1}</strong><span class="greska-id-display">(ID: ${greska.id})</span><br>
+                            <strong>Tip:</strong> ${greska.tip || 'N/A'}<br>
+                            <strong>Opis greške:</strong> ${greska.mjesto || 'N/A'}<br>
+                            <strong>Evid:</strong> ${greska.evidentirao || 'N/A'} (${vrijemeEvid})<br>
+                            <strong>Status:</strong> ${greska.rijesio ? `Riješio: <strong>${greska.rijesio}</strong> (${vrijemeRjes})` : '<span class="status-nije-rijeseno-text">NIJE RIJEŠENO</span>'}
+                        </div>
+                        <div class="greska-akcije">
+                            ${imaSlika ? `<button class="prikazi-slike-btn" data-slike='${JSON.stringify(greska.slike)}' title="Prikaži Slike (${greska.slike.length})"><svg width="16" height="16"><use href="#eye-icon"/></svg></button>` : ''}
+                            ${!greska.rijesio ? `<button class="rijesi-gresku-btn" data-greska-id="${greska.id}" title="Označi kao riješeno">Riješi</button>` : ''}
+                            <button class="uredi-gresku-btn" data-greska-id="${greska.id}" title="Uredi grešku"><svg width="14" height="14"><use href="#edit-icon"/></svg></button>
+                            <button class="obrisi-gresku-btn" data-greska-id="${greska.id}" title="Obriši grešku"><svg width="14" height="14"><use href="#trash-icon"/></svg></button>
+                        </div>`;
+                    const rijesiBtn = li.querySelector('.rijesi-gresku-btn');
+                    if (rijesiBtn) rijesiBtn.addEventListener('click', oznaciKaoRijeseno);
+                    const urediBtn = li.querySelector('.uredi-gresku-btn');
+                    if (urediBtn) urediBtn.addEventListener('click', otvoriFormuZaUredjivanje);
+                    const prikaziSlikeBtn = li.querySelector('.prikazi-slike-btn');
+                    if (prikaziSlikeBtn) prikaziSlikeBtn.addEventListener('click', prikaziSlikeGreske);
+                    const obrisiBtn = li.querySelector('.obrisi-gresku-btn');
+                    if (obrisiBtn) obrisiBtn.addEventListener('click', obrisiGresku);
+                    ul.appendChild(li);
+                });
+                greskeListDiv.appendChild(ul);
+            }
+        } catch (error) {
+            console.error("Greška pri učitavanju grešaka:", error);
+            greskeListDiv.innerHTML = `<p class="status-message error">Greška pri učitavanju grešaka: ${error.message}</p>`;
+            exportButtonsDiv.style.display = 'none';
+        }
+     }
+    async function dodajNoviProjekt() {
+        const imeInput = document.getElementById('novi-projekt-ime');
+        const kupacSelect = document.getElementById('novi-projekt-kupac');
+        const projektSelect = document.getElementById('projekt-select');
+        const ime = imeInput.value.trim();
+        const kupac = kupacSelect.value;
+        if (!ime) { prikaziStatus('projekt-add-status', 'Unesite ime projekta.', 'error'); return; }
+        if (!kupac) { prikaziStatus('projekt-add-status', 'Odaberite kupca.', 'error'); return; }
+        prikaziStatus('projekt-add-status', 'Dodavanje projekta...', 'loading');
+        try {
+            const response = await fetch('/api/projekti', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ime: ime, kupac: kupac }),
+            });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            const trenutniFilter = document.querySelector('#customer-filter-buttons .filter-btn.active')?.dataset.kupac || 'Svi';
+            if (trenutniFilter === 'Svi' || trenutniFilter === data.kupac) {
+                const option = document.createElement('option');
+                option.value = data.id;
+                option.textContent = data.ime;
+                projektSelect.appendChild(option);
+                Array.from(projektSelect.options)
+                     .sort((a, b) => {
+                        if (a.value === "") return -1;
+                        if (b.value === "") return 1;
+                        return a.text.localeCompare(b.text, 'hr');
+                     })
+                     .forEach(opt => projektSelect.add(opt));
+                projektSelect.value = data.id;
+            }
+            imeInput.value = '';
+            kupacSelect.value = '';
+            prikaziStatus('projekt-add-status', `Projekt "${data.ime}" uspješno dodan!`, 'success');
+            dohvatiIPrikaziKupce();
+            iscrtajGrafikon();
+        } catch (error) {
+            console.error("Greška kod dodavanja projekta:", error);
+            prikaziStatus('projekt-add-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+    async function spremiNoviSklop() {
+        const imeInput = document.getElementById('novi-sklop-ime');
+        const projektSelect = document.getElementById('projekt-select');
+        const imeSklopa = imeInput.value.trim();
+        const projektId = parseInt(projektSelect.value, 10);
+        if (!imeSklopa) { prikaziStatus('sklop-add-status', 'Ime sklopa je obavezno.', 'error'); return; }
+        if (!projektId) { prikaziStatus('sklop-add-status', 'Projekt nije odabran.', 'error'); return; }
+        prikaziStatus('sklop-add-status', 'Spremanje sklopa...', 'loading');
+        try {
+            const response = await fetch('/api/sklopovi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ime: imeSklopa, projekt_id: projektId }),
+            });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            document.getElementById('novi-sklop-forma').style.display = 'none';
+            imeInput.value = '';
+            prikaziStatus('sklop-add-status', `Sklop "${data.naziv}" uspješno dodan!`, 'success');
+            dohvatiSklopove(projektId);
+        } catch (error) {
+            console.error("Greška kod spremanja sklopa:", error);
+            prikaziStatus('sklop-add-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+    async function spremiNovuGresku() {
+        const tipSelect = document.getElementById('tip-greske');
+        const opisInput = document.getElementById('radno-mjesto');
+        const evidentiraoInput = document.getElementById('evidentirao');
+        const greskeView = document.getElementById('greske-view');
+        const novaGreskaForma = document.getElementById('nova-greska-forma');
+        const slikeInput = document.getElementById('slike');
+        const tip = tipSelect.value;
+        const opis = opisInput.value.trim();
+        const evidentirao = evidentiraoInput.value.trim();
+        const sklopId = parseInt(greskeView.dataset.trenutniSklopId, 10);
+        if (!tip) { prikaziStatus('greska-add-status', 'Odaberite tip greške.', 'error'); return; }
+        if (!opis) { prikaziStatus('greska-add-status', 'Unesite opis greške.', 'error'); return; }
+        if (!evidentirao) { prikaziStatus('greska-add-status', 'Unesite tko je evidentirao grešku.', 'error'); return; }
+        if (!sklopId) { prikaziStatus('greska-add-status', 'Interna greška: ID sklopa nije pronađen.', 'error'); return; }
+        prikaziStatus('greska-add-status', 'Spremanje greške...', 'loading');
+        const formData = new FormData();
+        formData.append('sklop_id', sklopId);
+        formData.append('tip', tip);
+        formData.append('mjesto', opis);
+        formData.append('evidentirao', evidentirao);
+        for (const file of slikeInput.files) {
+            formData.append('slike[]', file);
+        }
+        try {
+            const response = await fetch('/api/greske', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            prikaziStatus('greska-add-status', 'Greška uspješno evidentirana!', 'success');
+            tipSelect.value = '';
+            opisInput.value = '';
+            // evidentiraoInput.value = ''; // Ne čistimo jer je readonly
+            slikeInput.value = null;
+            novaGreskaForma.style.display = 'none';
+            const odabraniSklopNaziv = document.getElementById('odabrani-sklop-naslov').textContent.replace('Sklop: ', '');
+            const fakeEvent = { target: { closest: (selector) => { if (selector === 'button') return { dataset: { sklopId: sklopId, sklopNaziv: odabraniSklopNaziv } }; return null; } } };
+            await prikaziGreskeZaSklop(fakeEvent);
+            iscrtajGrafikon();
+        } catch (error) {
+            console.error("Greška kod spremanja greške:", error);
+            prikaziStatus('greska-add-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+    async function oznaciKaoRijeseno(event) {
+        const gumb = event.target.closest('button');
+        const greskaId = gumb.dataset.greskaId;
+        const imeRjesavatelja = prompt("Unesite ime osobe koja je riješila grešku:");
+        if (imeRjesavatelja === null) return;
+        if (imeRjesavatelja.trim() === '') {
+            alert("Unos imena rješavatelja je obavezan.");
+            return;
+        }
+        gumb.disabled = true;
+        gumb.textContent = '...';
+        try {
+            const response = await fetch(`/api/greske/${greskaId}/rijesi`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rijesio: imeRjesavatelja.trim() }),
+            });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            const greskeView = document.getElementById('greske-view');
+            const sklopId = greskeView.dataset.trenutniSklopId;
+            const odabraniSklopNaziv = document.getElementById('odabrani-sklop-naslov').textContent.replace('Sklop: ', '');
+            if (sklopId && odabraniSklopNaziv) {
+                 const fakeEvent = { target: { closest: (selector) => { if (selector === 'button') return { dataset: { sklopId: sklopId, sklopNaziv: odabraniSklopNaziv } }; return null; } } };
+                await prikaziGreskeZaSklop(fakeEvent);
+                iscrtajGrafikon();
+            } else {
+                alert("Greška označena kao riješena, ali prikaz možda nije automatski osvježen.");
+            }
+        } catch (error) {
+            console.error("Greška kod označavanja greške kao riješene:", error);
+            alert(`Greška: ${error.message}`);
+            gumb.disabled = false;
+            gumb.textContent = 'Riješi';
+        }
+    }
+    function otvoriFormuZaSklop(event) {
+        const gumb = event.target.closest('button');
+        const sklopId = gumb.dataset.sklopId;
+        const sklopNaziv = gumb.dataset.sklopNaziv;
+        const modal = document.getElementById('uredi-sklop-modal');
+        document.getElementById('uredi-sklop-ime-staro').textContent = sklopNaziv;
+        document.getElementById('uredi-sklop-ime-novo').value = sklopNaziv;
+        document.getElementById('uredi-sklop-id').value = sklopId;
+        modal.style.display = 'block';
+        prikaziStatus('uredi-sklop-status', '');
+        document.getElementById('novi-sklop-forma').style.display = 'none';
+        document.getElementById('uredi-sklop-ime-novo').focus();
+    }
+    async function spremiPromjenuImenaSklopa() {
+        const modal = document.getElementById('uredi-sklop-modal');
+        const sklopId = document.getElementById('uredi-sklop-id').value;
+        const novoImeInput = document.getElementById('uredi-sklop-ime-novo');
+        const novoIme = novoImeInput.value.trim();
+        if (!novoIme) { prikaziStatus('uredi-sklop-status', 'Unesite novo ime sklopa.', 'error'); return; }
+        if (!sklopId) { prikaziStatus('uredi-sklop-status', 'Interna greška: ID sklopa nedostaje.', 'error'); return; }
+        prikaziStatus('uredi-sklop-status', 'Spremanje imena...', 'loading');
+        try {
+            const response = await fetch(`/api/sklopovi/${sklopId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ naziv: novoIme })
+            });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            prikaziStatus('uredi-sklop-status', 'Ime sklopa uspješno spremljeno!', 'success');
+            modal.style.display = 'none';
+            dohvatiSklopove(data.projekt_id);
+        } catch (error) {
+            console.error("Greška kod preimenovanja sklopa:", error);
+            prikaziStatus('uredi-sklop-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+    async function otvoriFormuZaUredjivanje(event) {
+        const gumb = event.target.closest('button');
+        const greskaId = gumb.dataset.greskaId;
+        const formaUredi = document.getElementById('uredi-gresku-forma');
+        const formaDodaj = document.getElementById('nova-greska-forma');
+        formaDodaj.style.display = 'none';
+        prikaziStatus('uredi-greska-status', 'Učitavanje podataka greške...', 'loading');
+        formaUredi.style.display = 'block';
+        document.getElementById('slike-pregled-edit').innerHTML = '';
+        document.getElementById('slike_edit').value = null;
+        try {
+            const response = await fetch(`/api/greske/${greskaId}`);
+            if (!response.ok) { throw new Error((await response.json()).greska || `HTTP ${response.status}`); }
+            const greska = await response.json();
+            document.getElementById('uredi-greska-id').value = greska.id;
+            document.getElementById('uredi-greska-id-display').textContent = greska.id;
+            document.getElementById('uredi-tip-greske').value = greska.tip || '';
+            document.getElementById('uredi-radno-mjesto').value = greska.mjesto || '';
+            document.getElementById('uredi-evidentirao').value = greska.evidentirao || '';
+            document.getElementById('uredi-vrijeme-evid').textContent = formatirajDatum(greska.vrijeme_evidentiranja);
+            document.getElementById('uredi-rijesio').value = greska.rijesio || '';
+            document.getElementById('uredi-vrijeme-rjes').textContent = formatirajDatum(greska.vrijeme_rjesenja);
+            const slikePregledDiv = document.getElementById('slike-pregled-edit');
+            if (greska.slike && greska.slike.length > 0 && greska.slike[0] !== null) {
+                greska.slike.forEach(filename => {
+                    const imgContainer = document.createElement('div');
+                    imgContainer.classList.add('slika-container-edit');
+                    imgContainer.innerHTML = `
+                        <img src="/uploads/greske/${filename}" alt="Slika greške" loading="lazy">
+                        <button type="button" class="obrisi-sliku-btn" data-filename="${filename}" title="Označi za brisanje">
+                            <svg width="10" height="10"><use href="#trash-icon"/></svg>
+                        </button>
+                        <input type="hidden" name="original_image" value="${filename}">`;
+                    slikePregledDiv.appendChild(imgContainer);
+                });
+            } else {
+                slikePregledDiv.innerHTML = '<small><i>Nema postojećih slika.</i></small>';
+            }
+            prikaziStatus('uredi-greska-status', '');
+            formaUredi.scrollIntoView({ behavior: 'smooth' });
+        } catch(error) {
+            console.error("Greška kod dohvaćanja greške za uređivanje:", error);
+            prikaziStatus('uredi-greska-status', `Greška: ${error.message}`, 'error');
+            formaUredi.style.display = 'none';
+        }
+    }
+    async function spremiIzmjeneGreske() {
+        const forma = document.getElementById('uredi-gresku-forma');
+        const greskaId = document.getElementById('uredi-greska-id').value;
+        const tipSelect = document.getElementById('uredi-tip-greske');
+        const opisInput = document.getElementById('uredi-radno-mjesto');
+        const rijesioInput = document.getElementById('uredi-rijesio');
+        const slikeEditInput = document.getElementById('slike_edit');
+        const tip = tipSelect.value;
+        const opis = opisInput.value.trim();
+        const rijesio = rijesioInput.value.trim();
+        if (!greskaId) { prikaziStatus('uredi-greska-status', 'Interna greška: ID greške nedostaje.', 'error'); return; }
+        if (!tip) { prikaziStatus('uredi-greska-status', 'Odaberite tip greške.', 'error'); return; }
+        if (!opis) { prikaziStatus('uredi-greska-status', 'Unesite opis greške.', 'error'); return; }
+        prikaziStatus('uredi-greska-status', 'Spremanje izmjena...', 'loading');
+        const formData = new FormData();
+        formData.append('tip', tip);
+        formData.append('mjesto', opis);
+        formData.append('rijesio', rijesio);
+        for (const file of slikeEditInput.files) { formData.append('slike_edit[]', file); }
+        const slikeZaBrisanje = forma.querySelectorAll('.slika-container-edit.za-brisanje input[type="hidden"][name="original_image"]');
+        slikeZaBrisanje.forEach(input => { formData.append('obrisi_sliku[]', input.value); });
+        try {
+            const response = await fetch(`/api/greske/${greskaId}`, { method: 'PUT', body: formData });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            prikaziStatus('uredi-greska-status', 'Izmjene uspješno spremljene!', 'success');
+            forma.style.display = 'none';
+            const greskeView = document.getElementById('greske-view');
+            const sklopId = greskeView.dataset.trenutniSklopId;
+            const odabraniSklopNaziv = document.getElementById('odabrani-sklop-naslov').textContent.replace('Sklop: ', '');
+            if (sklopId && odabraniSklopNaziv) {
+                 const fakeEvent = { target: { closest: (selector) => { if (selector === 'button') return { dataset: { sklopId: sklopId, sklopNaziv: odabraniSklopNaziv } }; return null; } } };
+                await prikaziGreskeZaSklop(fakeEvent);
+                iscrtajGrafikon();
+            }
+        } catch (error) {
+            console.error("Greška kod spremanja izmjena greške:", error);
+            prikaziStatus('uredi-greska-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+
+    async function pokreniBrisanjeProjekta() {
+        const projektSelect = document.getElementById('projekt-select');
+        const projektId = projektSelect.value;
+        const projektIme = projektSelect.options[projektSelect.selectedIndex].text;
+        if (!projektId) { alert("Molimo odaberite projekt koji želite obrisati."); return; }
+        const potvrda = confirm(`Jeste li apsolutno sigurni da želite obrisati projekt "${projektIme}"?\n\nUPOZORENJE: Ovo će TRAJNO obrisati projekt, SVE njegove sklopove i SVE evidentirane greške sa slikama! Ova akcija se ne može poništiti.`);
+        if (!potvrda) return;
+        const lozinka = prompt(`Za potvrdu brisanja projekta "${projektIme}", unesite lozinku:`);
+        if (lozinka === null) return;
+        prikaziStatus('projekt-list-status', `Brisanje projekta "${projektIme}"...`, 'loading');
+        try {
+            const response = await fetch(`/api/projekti/${projektId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: lozinka })
+            });
+            const result = await response.json();
+            if (response.ok) {
+                alert(`Projekt "${projektIme}" je uspješno obrisan.`);
+                window.location.reload(); 
+            } else {
+                throw new Error(result.greska || 'Brisanje nije uspjelo.');
+            }
+        } catch (error) {
+            console.error('Došlo je do greške kod brisanja projekta:', error);
+            prikaziStatus('projekt-list-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+    async function obrisiSklop() {
+        const sklopId = document.getElementById('uredi-sklop-id').value;
+        const sklopIme = document.getElementById('uredi-sklop-ime-staro').textContent;
+        const modal = document.getElementById('uredi-sklop-modal');
+        if (!sklopId) { prikaziStatus('uredi-sklop-status', 'Interna greška: ID sklopa nedostaje.', 'error'); return; }
+        if (!confirm(`Jeste li sigurni da želite OBrisati sklop "${sklopIme}" i SVE njegove greške? Ova akcija je nepovratna!`)) return;
+        const unesenaLozinka = prompt("Unesite lozinku za potvrdu brisanja:");
+        if (unesenaLozinka === null) return;
+        if (unesenaLozinka.trim() === '') {
+            alert("Lozinka ne može biti prazna.");
+            prikaziStatus('uredi-sklop-status', 'Brisanje otkazano: Lozinka nije unesena.', 'error');
+            return;
+        }
+        prikaziStatus('uredi-sklop-status', 'Brisanje sklopa...', 'loading');
+        try {
+            const response = await fetch(`/api/sklopovi/${sklopId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: unesenaLozinka })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) { throw new Error(data.greska || "Pogrešna lozinka ili nemate ovlasti."); }
+                else { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            }
+            prikaziStatus('uredi-sklop-status', `Sklop "${sklopIme}" uspješno obrisan!`, 'success');
+            modal.style.display = 'none';
+            const trenutniFilter = document.querySelector('#customer-filter-buttons .filter-btn.active')?.dataset.kupac || 'Svi';
+            dohvatiProjekte(trenutniFilter);
+            document.getElementById('sklopovi-list').innerHTML = '<p><i>Odaberite projekt.</i></p>';
+            document.getElementById('dodaj-sklop-btn').style.display = 'none';
+            document.getElementById('greske-view').style.display = 'none';
+            iscrtajGrafikon();
+        } catch (error) {
+            console.error("Greška kod brisanja sklopa:", error);
+            prikaziStatus('uredi-sklop-status', `Greška: ${error.message}`, 'error');
+        }
+    }
+    async function obrisiGresku(event) {
+        const gumb = event.target.closest('button');
+        const greskaId = gumb.dataset.greskaId;
+        if (!greskaId) { alert("Interna greška: ID greške nije pronađen."); return; }
+        const listItem = gumb.closest('li');
+        const rbText = listItem?.querySelector('.greska-sadrzaj strong')?.textContent || `(ID: ${greskaId})`;
+        if (!confirm(`Jeste li sigurni da želite OBrisati grešku ${rbText}? Ova akcija je nepovratna!`)) return;
+        const unesenaLozinka = prompt("Unesite lozinku za potvrdu brisanja:");
+        if (unesenaLozinka === null) return;
+        if (unesenaLozinka.trim() === '') { alert("Lozinka ne može biti prazna."); return; }
+        if (listItem) listItem.style.opacity = '0.5';
+        try {
+            const response = await fetch(`/api/greske/${greskaId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: unesenaLozinka })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                 if (response.status === 401 || response.status === 403) { throw new Error(data.greska || "Pogrešna lozinka ili nemate ovlasti."); }
+                 else { throw new Error(data.greska || `HTTP greška ${response.status}`); }
+            }
+            alert(data.message || 'Greška uspješno obrisana.');
+            if (listItem) { listItem.remove(); }
+            const greskeView = document.getElementById('greske-view');
+            const sklopId = greskeView.dataset.trenutniSklopId;
+            const odabraniSklopNaziv = document.getElementById('odabrani-sklop-naslov')?.textContent.replace('Sklop: ', '') || null;
+            if (sklopId && odabraniSklopNaziv) {
+                 const fakeEvent = { target: { closest: (selector) => { if (selector === 'button') return { dataset: { sklopId: sklopId, sklopNaziv: odabraniSklopNaziv } }; return null; } } };
+                 await prikaziGreskeZaSklop(fakeEvent);
+                 iscrtajGrafikon();
+            } else { iscrtajGrafikon(); }
+        } catch (error) {
+            console.error("Greška kod brisanja greške:", error);
+            alert(`Greška: ${error.message}`);
+            if (listItem) listItem.style.opacity = '1';
+        }
+    }
+    function showModalImage(index) {
+        if (!modalImageFilenames || modalImageFilenames.length === 0) return;
+        index = Math.max(0, Math.min(index, modalImageFilenames.length - 1));
+        modalImageIndex = index;
+        modalImage.src = `/uploads/greske/${modalImageFilenames[modalImageIndex]}`;
+        modalImage.alt = `Slika ${index + 1}/${modalImageFilenames.length}`;
+        modalPrevBtn.disabled = modalImageIndex === 0;
+        modalNextBtn.disabled = modalImageIndex === modalImageFilenames.length - 1;
+    }
+    function prikaziSlikeGreske(event) {
+        const gumb = event.target.closest('button');
+        const slikeJson = gumb.dataset.slike;
+        if (!slikeJson) return;
+        try {
+            const slike = JSON.parse(slikeJson);
+            modalBody.innerHTML = '';
+            if (slike.length === 0 || slike[0] === null) {
+                modalImage.style.display = 'none';
+                modalBody.innerHTML = '<p style="color: white; text-align: center;">Nema slika za prikaz.</p>';
+                modalPrevBtn.style.display = 'none';
+                modalNextBtn.style.display = 'none';
+            } else {
+                modalBody.appendChild(modalImage);
+                modalImage.style.display = 'block';
+                modalImageFilenames = slike;
+                showModalImage(0);
+                const showNav = modalImageFilenames.length > 1;
+                modalPrevBtn.style.display = showNav ? 'block' : 'none';
+                modalNextBtn.style.display = showNav ? 'block' : 'none';
+            }
+            modal.style.display = "flex";
+        } catch (e) { console.error("Greška kod parsiranja JSON-a za slike:", e, slikeJson); }
+    }
+    async function iscrtajGrafikon() {
+        const canvas = document.getElementById('errorChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const chartStatus = document.getElementById('chart-status');
+        chartStatus.textContent = 'Učitavanje statistike...';
+        chartStatus.className = 'status-message loading';
+        try {
+            const response = await fetch('/api/stats/errors_by_customer_and_type');
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const stats = await response.json();
+            chartStatus.textContent = '';
+            chartStatus.className = 'status-message';
+            const sviTipovi = new Set();
+            const kupci = Object.keys(stats).sort();
+            kupci.forEach(kupac => { Object.keys(stats[kupac]).forEach(tip => sviTipovi.add(tip)); });
+            const labels = Array.from(sviTipovi).sort();
+            const datasets = [];
+            const boje = ['rgba(255, 99, 132, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)', 'rgba(153, 102, 255, 0.7)', 'rgba(255, 159, 64, 0.7)'];
+            kupci.forEach((kupac, index) => {
+                const data = labels.map(tip => stats[kupac][tip] || 0);
+                datasets.push({ label: kupac, data: data, backgroundColor: boje[index % boje.length], borderColor: boje[index % boje.length].replace('0.7', '1'), borderWidth: 1 });
+            });
+            if (errorChartInstance) { errorChartInstance.destroy(); }
+            errorChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    scales: { y: { title: { display: true, text: 'Tip Greške' }, ticks: { autoSkip: false } }, x: { beginAtZero: true, title: { display: true, text: 'Broj Grešaka' }, ticks: { precision: 0 } } },
+                    plugins: { legend: { position: 'top' }, title: { display: true, text: 'Broj Grešaka po Tipu i Kupcu' } }
+                }
+            });
+        } catch (error) {
+            console.error("Greška kod dohvaćanja ili iscrtavanja statistike:", error);
+            chartStatus.textContent = `Greška pri učitavanju statistike: ${error.message}`;
+            chartStatus.className = 'status-message error';
+            if (errorChartInstance) { errorChartInstance.destroy(); errorChartInstance = null; }
+        }
+    }
+
+    // Event Listeneri
+    document.getElementById('customer-filter-buttons').addEventListener('click', (event) => {
+        if (event.target.classList.contains('filter-btn')) {
+            const gumb = event.target;
+            document.querySelectorAll('#customer-filter-buttons .filter-btn').forEach(btn => btn.classList.remove('active'));
+            gumb.classList.add('active');
+            dohvatiProjekte(gumb.dataset.kupac);
+        }
+    });
+    document.getElementById('projekt-select').addEventListener('change', (event) => {
+        document.getElementById('greske-view').style.display = 'none';
+        document.getElementById('uredi-gresku-forma').style.display = 'none';
+        document.getElementById('uredi-sklop-modal').style.display = 'none';
+        document.getElementById('sklopovi-view').style.display = 'block';
+        const deleteBtn = document.getElementById('obrisi-projekt-btn');
+        deleteBtn.disabled = !event.target.value;
+        dohvatiSklopove(event.target.value);
+    });
+    document.getElementById('dodaj-projekt-btn').addEventListener('click', dodajNoviProjekt);
+    document.getElementById('novi-projekt-ime').addEventListener('keypress', (e) => { if (e.key === 'Enter') dodajNoviProjekt(); });
+    document.getElementById('dodaj-sklop-btn').addEventListener('click', () => {
+        document.getElementById('uredi-sklop-modal').style.display='none';
+        document.getElementById('novi-sklop-forma').style.display = 'block';
+        document.getElementById('novi-sklop-ime').focus();
+        prikaziStatus('sklop-add-status', '');
+    });
+    document.getElementById('odustani-sklop-btn').addEventListener('click', () => {
+        document.getElementById('novi-sklop-forma').style.display = 'none';
+        prikaziStatus('sklop-add-status', '');
+        document.getElementById('novi-sklop-ime').value = '';
+    });
+    document.getElementById('spremi-sklop-btn').addEventListener('click', spremiNoviSklop);
+    document.getElementById('novi-sklop-ime').addEventListener('keypress', (e) => { if (e.key === 'Enter') spremiNoviSklop(); });
+    document.getElementById('odustani-uredi-sklop-btn').addEventListener('click', () => {
+        document.getElementById('uredi-sklop-modal').style.display = 'none';
+        prikaziStatus('uredi-sklop-status', '');
+    });
+    document.getElementById('spremi-ime-sklopa-btn').addEventListener('click', spremiPromjenuImenaSklopa);
+    document.getElementById('uredi-sklop-ime-novo').addEventListener('keypress', (e) => { if (e.key === 'Enter') spremiPromjenuImenaSklopa(); });
+    document.getElementById('obrisi-sklop-btn').addEventListener('click', obrisiSklop);
+    document.getElementById('obrisi-projekt-btn').addEventListener('click', pokreniBrisanjeProjekta);
+    document.getElementById('nazad-na-sklopove').addEventListener('click', () => {
+        document.getElementById('greske-view').style.display = 'none';
+        document.getElementById('uredi-gresku-forma').style.display = 'none';
+        document.getElementById('sklopovi-view').style.display = 'block';
+        prikaziStatus('greska-add-status', '');
+        prikaziStatus('uredi-greska-status', '');
+    });
+    document.getElementById('dodaj-gresku-btn').addEventListener('click', () => {
+        document.getElementById('uredi-gresku-forma').style.display = 'none';
+        const forma = document.getElementById('nova-greska-forma');
+        forma.style.display = 'block';
+        document.getElementById('datum-vrijeme').textContent = new Date().toLocaleString('hr-HR');
+        prikaziStatus('greska-add-status', '');
+        document.getElementById('tip-greske').value = '';
+        document.getElementById('radno-mjesto').value = '';
+        document.getElementById('slike').value = null;
+        document.getElementById('tip-greske').focus();
+    });
+    document.getElementById('odustani-greska-btn').addEventListener('click', () => {
+        document.getElementById('nova-greska-forma').style.display = 'none';
+        prikaziStatus('greska-add-status', '');
+    });
+    document.getElementById('spremi-gresku-btn').addEventListener('click', spremiNovuGresku);
+    document.getElementById('excel-sklop-sve-btn').addEventListener('click', () => { const id = document.getElementById('greske-view').dataset.trenutniSklopId; if(id) window.location.href = `/api/greske/sklop/${id}/excel/sve`; });
+    document.getElementById('excel-sklop-nerijesene-btn').addEventListener('click', () => { const id = document.getElementById('greske-view').dataset.trenutniSklopId; if(id) window.location.href = `/api/greske/sklop/${id}/excel/nerijesene`; });
+    document.getElementById('pdf-sklop-sve-btn').addEventListener('click', () => { const id = document.getElementById('greske-view').dataset.trenutniSklopId; if(id) window.location.href = `/api/greske/sklop/${id}/pdf/sve`; });
+    document.getElementById('pdf-sklop-nerijesene-btn').addEventListener('click', () => { const id = document.getElementById('greske-view').dataset.trenutniSklopId; if(id) window.location.href = `/api/greske/sklop/${id}/pdf/nerijesene`; });
+    document.getElementById('spremi-izmjene-greske-btn').addEventListener('click', spremiIzmjeneGreske);
+    document.getElementById('odustani-uredi-gresku-btn').addEventListener('click', () => { document.getElementById('uredi-gresku-forma').style.display = 'none'; prikaziStatus('uredi-greska-status', ''); });
+    document.getElementById('slike-pregled-edit').addEventListener('click', function(event) {
+        const deleteButton = event.target.closest('.obrisi-sliku-btn');
+        if (deleteButton) {
+            const container = deleteButton.closest('.slika-container-edit');
+            if (confirm(`Jeste li sigurni da želite označiti sliku za brisanje?`)) {
+                container.classList.toggle('za-brisanje');
+            }
+        }
+        const imageElement = event.target.closest('img');
+        if (imageElement && event.target.closest('.slika-container-edit')) {
+             modalImageFilenames = [imageElement.src.split('/').pop()];
+             modalImage.src = imageElement.src;
+             modal.style.display = "flex";
+        }
+    });
+    document.getElementById('export-csv-btn').addEventListener('click', () => { window.location.href = '/export/csv'; });
+    document.getElementById('export-excel-global-btn').addEventListener('click', () => { window.location.href = '/export/excel'; });
+    modalPrevBtn.onclick = () => showModalImage(modalImageIndex - 1);
+    modalNextBtn.onclick = () => showModalImage(modalImageIndex + 1);
+    closeModalBtn.onclick = function() { modal.style.display = "none"; }
+    window.onclick = function(event) { if (event.target == modal) { modal.style.display = "none"; } }
+    document.addEventListener('keydown', function(event) { if (event.key === "Escape" && modal.style.display === "flex") { modal.style.display = "none"; } });
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('greske-view').style.display = 'none';
+        document.getElementById('uredi-sklop-modal').style.display = 'none';
+        dohvatiIPrikaziKupce();
+        iscrtajGrafikon();
+        dohvatiProjekte();
+    });
+</script>
+{% endblock %}
